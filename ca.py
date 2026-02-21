@@ -2,7 +2,7 @@ import os
 import sys
 import signal
 from neonize.client import NewClient
-from neonize.events import MessageEv, ConnectedEv, PairStatus
+from neonize.events import MessageEv, ConnectedEv, PairStatusEv  # Changed PairStatus to PairStatusEv
 from neonize.types import JID
 
 # --- CONFIGURATION ---
@@ -33,8 +33,55 @@ def on_connected(client, event: ConnectedEv):
     
     print(f"[+] Whitelisted {len(allowed_contacts)} contacts. Everyone else gets the hammer.")
 
-@client.event(PairStatus)
-def on_pair_status(client, status: PairStatus):
+@client.event(PairStatusEv)  # Changed to PairStatusEv
+def on_pair_status(client, status: PairStatusEv):  # Changed to PairStatusEv
+    print(f"[*] Pairing Status: {status}")
+    # Note: You might need to check the actual status value/type
+    # if status == PairStatusEv.PAIRED:  # Adjust this based on actual implementation
+    #     print("[+] Logged in successfully.")
+
+@client.event(MessageEv)
+def on_message(client, message: MessageEv):
+    # Ignore messages from yourself
+    if message.Info.IsFromMe:
+        return
+
+    # Extract sender details
+    # The sender JID looks like '1234567890@s.whatsapp.net'
+    sender_jid = message.Info.Sender
+    sender_number = sender_jid.User
+    
+    # Check if the sender is a group (usually ends in g.us)
+    # If you want to block unknown groups too, remove this check.
+    if "g.us" in sender_jid.Server:
+        return
+
+    # THE KILL SWITCH 💀
+    if sender_number not in allowed_contacts:
+        print(f"[!] UNKNOWN DETECTED: {sender_number}")
+        print(f"[*] Executing Block Protocol on {sender_number}...")
+        
+        try:
+            # Send a final goodbye message (Optional - delete if you want stealth)
+            # client.send_message(sender_jid, "🚫 Access Denied. You are not in the whitelist.")
+            
+            # BLOCK THE USER
+            # Note: Check the correct method name for blocking in your neonize version
+            # Some possibilities:
+            # client.block_user(sender_jid)
+            # or
+            client.update_blocklist(sender_jid, action="block")
+            print(f"[+] {sender_number} has been BLOCKED successfully.")
+            
+        except Exception as e:
+            print(f"[ERROR] Failed to block {sender_number}: {e}")
+    else:
+        print(f"[ok] Message from contact: {sender_number}")
+
+if __name__ == "__main__":
+    print("[-] Omega Pro MSJ: Initializing...")
+    print("[-] Scan the QR code if prompted.")
+    client.connect()def on_pair_status(client, status: PairStatus):
     print(f"[*] Pairing Status: {status}")
     if status == PairStatus.PAIRED:
         print("[+] Logged in successfully.")
